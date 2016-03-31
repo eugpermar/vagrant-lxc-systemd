@@ -1,0 +1,29 @@
+[Unit]
+Description=Bridge interface for LXC Containers
+
+[Service]
+Type=oneshot
+
+# Bring up bridge interface
+ExecStart=/sbin/brctl addbr lxcbr0
+ExecStart=/sbin/ip address add 192.168.150.1/24 dev lxcbr0
+ExecStart=/sbin/ip link set lxcbr0 up
+
+# Setup IP forwarding
+ExecStart=/bin/echo 1 > /proc/sys/net/ipv4/ip_forward
+ExecStart=/sbin/iptables        -A FORWARD     -i lxcbr0 -j ACCEPT
+ExecStart=/sbin/iptables -t nat -A POSTROUTING -o wlan0  -j MASQUERADE
+
+#Workaround dhclient bugs on debian 7
+ExecStart=/sbin/iptables -t mangle -A POSTROUTING -p udp --dport bootpc -j CHECKSUM --checksum-fill
+
+RemainAfterExit=yes
+
+# Undo forwarding
+ExecStop=/sbin/iptables -t mangle -D POSTROUTING -p udp --dport bootpc -j CHECKSUM --checksum-fill
+ExecStop=/sbin/iptables        -D FORWARD     -i lxcbr0 -j ACCEPT
+ExecStop=/sbin/iptables -t nat -D POSTROUTING -o wlan0  -j MASQUERADE
+
+# Bring bridge interface down
+ExecStop=/sbin/ip link set lxcbr0 down
+ExecStop=/sbin/brctl delbr lxcbr0
